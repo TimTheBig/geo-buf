@@ -99,11 +99,13 @@ impl Coordinate {
     /// let c1 = geo_buf::Coordinate::new(3., 4.);
     /// assert_eq!(c1, (3., 4.).into());
     /// ```
-    pub fn new(x: f64, y: f64) -> Self {
+    #[inline]
+    #[must_use]
+    pub const fn new(x: f64, y: f64) -> Self {
         Self(x, y)
     }
 
-    /// Returns a tuple wihch has values of each component.
+    /// Returns a tuple which has values of each component.
     ///
     /// # Example
     ///
@@ -112,7 +114,8 @@ impl Coordinate {
     /// let t1 = c1.get_val();
     /// assert_eq!(t1, (3., 4.));
     /// ```
-    pub fn get_val(&self) -> (f64, f64) {
+    #[inline]
+    pub const fn get_val(&self) -> (f64, f64) {
         (self.0, self.1)
     }
 
@@ -172,8 +175,8 @@ impl Coordinate {
     /// + This operation is linear.
     /// + This operation is *not* commutative. (More precisely, it is anti-commutative.)
     /// + The sign of cross product indicates the orientation of **a** and **b**. If **a** lies before **b** in
-    /// the counter-clockwise (CCW for short) ordering, the sign of the result will be positive. If **a** lies after **b** in CCW ordering,
-    /// the sign will be negative. The result will be zero if two vectors are colinear. (I.e. lay on the same line.)
+    ///   the counter-clockwise (CCW for short) ordering, the sign of the result will be positive. If **a** lies after **b** in CCW ordering,
+    ///   the sign will be negative. The result will be zero if two vectors are co-linear. (I.e. lay on the same line.)
     ///
     pub fn outer_product(&self, rhs: &Self) -> f64 {
         self.0 * rhs.1 - self.1 * rhs.0

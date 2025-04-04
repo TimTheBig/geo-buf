@@ -1,23 +1,24 @@
-#![allow(dead_code)]
 pub(crate) struct PriorityQueue<T: std::cmp::PartialOrd> {
     size: usize,
     content: Vec<T>,
 }
 
 impl<T: std::cmp::PartialOrd> PriorityQueue<T> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             size: 0,
             content: Vec::new(),
         }
     }
 
+    /// Clears content and sets size to 0
+    #[allow(dead_code)]
     pub fn initialize(&mut self) {
         self.size = 0;
-        self.content = Vec::new();
+        self.content.clear();
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.size == 0
     }
 
@@ -37,6 +38,7 @@ impl<T: std::cmp::PartialOrd> PriorityQueue<T> {
         self.size += 1;
     }
 
+    #[allow(dead_code)]
     pub fn peek(&self) -> Option<&T> {
         if self.is_empty() {
             return None;

@@ -41,9 +41,8 @@ pub(crate) struct Node {
     pub(crate) done: bool,
 }
 
-#[allow(dead_code)]
 impl Node {
-    fn new(index: usize, left: usize, right: usize) -> Self {
+    const fn new(index: usize, left: usize, right: usize) -> Self {
         Self {
             index: IndexType::RealIndex(index),
             left: IndexType::PointerIndex(left),
@@ -52,11 +51,13 @@ impl Node {
         }
     }
 
-    pub(crate) fn lv(&self) -> IndexType {
+    #[allow(dead_code)]
+    pub(crate) const fn lv(&self) -> IndexType {
         self.left
     }
 
-    pub(crate) fn rv(&self) -> IndexType {
+    #[allow(dead_code)]
+    pub(crate) const fn rv(&self) -> IndexType {
         self.right
     }
 }
@@ -139,32 +140,32 @@ impl VertexQueue {
         panic!("Expected parameter \"cv\" as IndexType::RealIndex")
     }
 
+    /// Get the left value of a `Node` at current value(cv)'s index
     pub(crate) fn lv(&self, cv: IndexType) -> IndexType {
         if let IndexType::PointerIndex(cv) = cv {
             return self.content[cv].left;
         }
         panic!("Expected parameter \"cv\" as IndexType::PointerIndex");
-    /// Get the left value of a `Node` at cv's index
     }
 
+    /// Get the right value of a `Node` at current value(cv)'s index
     pub(crate) fn rv(&self, cv: IndexType) -> IndexType {
         if let IndexType::PointerIndex(cv) = cv {
             return self.content[cv].right;
         }
         panic!("Expected parameter \"cv\" as IndexType::PointerIndex");
-    /// Get the right value of a `Node` at cv's index
     }
 
+    #[allow(dead_code)]
     pub(crate) fn llv(&self, cv: IndexType) -> IndexType {
         let cv = self.lv(cv);
         self.lv(cv)
-    #[allow(dead_code)]
     }
 
+    #[allow(dead_code)]
     pub(crate) fn rrv(&self, cv: IndexType) -> IndexType {
         let cv = self.rv(cv);
         self.rv(cv)
-    #[allow(dead_code)]
     }
 
     pub(crate) fn remove(&mut self, cv: IndexType) -> IndexType {

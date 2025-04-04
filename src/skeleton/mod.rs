@@ -64,29 +64,6 @@ impl VertexType {
         }
     }
 
-    fn new_split_vertex(
-        anchor: usize,
-        location: Coordinate,
-        split_left: usize,
-        split_right: usize,
-        time_elapsed: f64,
-    ) -> Self {
-        VertexType::Split {
-            anchor,
-            location,
-            split_left,
-            split_right,
-            time_elapsed,
-        }
-    }
-
-    fn new_root_vertex(location: Coordinate, time_elapsed: f64) -> Self {
-        VertexType::Root {
-            location,
-            time_elapsed,
-        }
-    }
-
     fn initialize_from_polygon(input_polygon: &Polygon, orient: bool) -> Vec<Self> {
         let len = input_polygon.exterior().0.len() - 1;
         let mut ret = Vec::with_capacity(
@@ -158,7 +135,7 @@ impl VertexType {
         ret
     }
 
-    fn unwrap_location(&self) -> Coordinate {
+    const fn inner_location(&self) -> Coordinate {
         match self {
             VertexType::Tree { axis, .. } => axis.origin,
             VertexType::Split { location, .. } => *location,
@@ -166,7 +143,7 @@ impl VertexType {
         }
     }
 
-    fn unwrap_time(&self) -> f64 {
+    const fn time_elapsed(&self) -> f64 {
         match self {
             VertexType::Tree { time_elapsed, .. } => *time_elapsed,
             VertexType::Split { time_elapsed, .. } => *time_elapsed,
@@ -380,7 +357,7 @@ impl Skeleton {
             }
             let crd = self.ray_vector[idx]
                 .unwrap_ray()
-                .point_by_ratio(offset_distance - self.ray_vector[idx].unwrap_time());
+                .point_by_ratio(offset_distance - self.ray_vector[idx].time_elapsed());
             crdv.push(crd);
         }
         if cur_vidx < usize::MAX {
@@ -427,7 +404,7 @@ impl Skeleton {
                 cur_vidx = vidx;
                 crdv = Vec::new();
             }
-            let time_left = offset_distance - self.ray_vector[idx].unwrap_time();
+            let time_left = offset_distance - self.ray_vector[idx].time_elapsed();
             let (lray, rray) = self.ray_vector[idx].unwrap_base_ray();
             let cray = self.ray_vector[idx].unwrap_ray();
             if (lray.angle + cray.angle).norm() > (lray.angle - cray.angle).norm() {
@@ -763,15 +740,15 @@ impl Skeleton {
                 VertexType::Tree { parent, .. } => {
                     if parent == usize::MAX {
                         let ls = LineString(vec![
-                            ray_vector[cur].unwrap_location().into(),
+                            ray_vector[cur].inner_location().into(),
                             ray_vector[cur].unwrap_ray().point_by_ratio(5.).into(),
                         ]);
                         ret.push(ls);
                         return;
                     }
                     let ls = LineString(vec![
-                        ray_vector[cur].unwrap_location().into(),
-                        ray_vector[parent].unwrap_location().into(),
+                        ray_vector[cur].inner_location().into(),
+                        ray_vector[parent].inner_location().into(),
                     ]);
                     ret.push(ls);
                     dfs_helper(parent, visit, ret, ray_vector);
@@ -840,10 +817,10 @@ fn init_pq(orient: bool, vertex_vector: &mut Vec<VertexType>, vertex_queue: &mut
             match Skeleton::apply_event(vertex_queue, &new_event) {
                 (Some(IndexType::RealIndex(rv)), None) => {
                     vertex_vector[rv].set_parent(new_index);
-                    vertex_vector[new_index] = VertexType::new_root_vertex(
-                        vertex_vector[new_index].unwrap_location(),
-                        vertex_vector[new_index].unwrap_time(),
-                    );
+                    vertex_vector[new_index] = VertexType::Root {
+                        location: vertex_vector[new_index].inner_location(),
+                        time_elapsed: vertex_vector[new_index].time_elapsed(),
+                    };
                 }
                 (Some(cv), None) => {
                     Skeleton::make_shrink_event(
@@ -880,13 +857,13 @@ fn init_pq(orient: bool, vertex_vector: &mut Vec<VertexType>, vertex_queue: &mut
             if rv.len() == 1 && feq(rv[0].0, time) && rv[0].1.eq(&location) {
                 let new_index1 = vertex_vector.len();
                 let new_index2 = new_index1 + 1;
-                let new_split_vertex = VertexType::new_split_vertex(
-                    anchor_real,
+                let new_split_vertex = VertexType::Split {
+                    anchor: anchor_real,
                     location,
-                    new_index1,
-                    new_index2,
-                    vertex_vector[anchor_real].unwrap_time(),
-                );
+                    split_left: new_index1,
+                    split_right: new_index2,
+                    time_elapsed: vertex_vector[anchor_real].time_elapsed(),
+                };
                 let new_tree_vertex1 = VertexType::new_tree_vertex(
                     location,
                     vertex_vector[anchor_real].unwrap_base_ray().0,
