@@ -67,9 +67,8 @@ pub(crate) struct VertexQueue {
     pub(crate) start_vertex: Vec<usize>,
 }
 
-#[allow(dead_code)]
 impl VertexQueue {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             content: Vec::new(),
             start_vertex: Vec::new(),
@@ -145,6 +144,7 @@ impl VertexQueue {
             return self.content[cv].left;
         }
         panic!("Expected parameter \"cv\" as IndexType::PointerIndex");
+    /// Get the left value of a `Node` at cv's index
     }
 
     pub(crate) fn rv(&self, cv: IndexType) -> IndexType {
@@ -152,16 +152,19 @@ impl VertexQueue {
             return self.content[cv].right;
         }
         panic!("Expected parameter \"cv\" as IndexType::PointerIndex");
+    /// Get the right value of a `Node` at cv's index
     }
 
     pub(crate) fn llv(&self, cv: IndexType) -> IndexType {
         let cv = self.lv(cv);
         self.lv(cv)
+    #[allow(dead_code)]
     }
 
     pub(crate) fn rrv(&self, cv: IndexType) -> IndexType {
         let cv = self.rv(cv);
         self.rv(cv)
+    #[allow(dead_code)]
     }
 
     pub(crate) fn remove(&mut self, cv: IndexType) -> IndexType {
@@ -235,7 +238,7 @@ impl VertexQueue {
             while cur != self.start_vertex[sv_idx] {
                 if visit[cur] {
                     panic!(
-                        "Something Worng in cleanup phase: cur {} from {}, sv {:?}",
+                        "Something Wrong in cleanup phase: cur {} from {}, sv {:?}",
                         cur, sv_idx, self.start_vertex
                     );
                 }
