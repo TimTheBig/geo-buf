@@ -77,7 +77,31 @@ impl VertexQueue {
     }
 
     pub(crate) fn initialize_from_polygon(&mut self, p: &Polygon) {
-        self.initialize_from_polygon_vector(&vec![p.clone()])
+        let offset = self.content.len();
+        let len = p.exterior().0.len() - 1;
+
+        self.start_vertex.push(offset);
+        for i in 0..len {
+            let new_node = Node::new(
+                i + offset,
+                (i + len - 1) % len + offset,
+                (i + 1) % len + offset,
+            );
+            self.content.push(new_node);
+        }
+        for i in 0..p.interiors().len() {
+            let offset = self.content.len();
+            let len = p.interiors()[i].0.len() - 1;
+            self.start_vertex.push(offset);
+            for j in 0..len {
+                let new_node = Node::new(
+                    j + offset,
+                    (j + len - 1) % len + offset,
+                    (j + 1) % len + offset,
+                );
+                self.content.push(new_node);
+            }
+        }
     }
 
     pub(crate) fn initialize_from_polygon_vector(&mut self, pv: &Vec<Polygon>) {

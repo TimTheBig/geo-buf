@@ -87,9 +87,39 @@ impl VertexType {
         }
     }
 
-    #[allow(dead_code)]
     fn initialize_from_polygon(input_polygon: &Polygon, orient: bool) -> Vec<Self> {
-        Self::initialize_from_polygon_vector(&vec![input_polygon.clone()], orient)
+        let len = input_polygon.exterior().0.len() - 1;
+        let mut ret = Vec::with_capacity(
+            len + 1
+            + (input_polygon.interiors().iter().map(|ls| ls.0.len() + 1).sum::<usize>())
+        );
+
+        for cur in 0..len {
+            let prv = (cur + len - 1) % len;
+            let nxt = (cur + 1) % len;
+            let new_vertex = VertexType::init_tree_vertex(
+                input_polygon.exterior().0[prv].into(),
+                input_polygon.exterior().0[cur].into(),
+                input_polygon.exterior().0[nxt].into(),
+                orient,
+            );
+            ret.push(new_vertex);
+        }
+        for i in 0..input_polygon.interiors().len() {
+            let len = input_polygon.interiors()[i].0.len() - 1;
+            for cur in 0..len {
+                let prv = (cur + len - 1) % len;
+                let nxt = (cur + 1) % len;
+                let new_node = VertexType::init_tree_vertex(
+                    input_polygon.interiors()[i].0[prv].into(),
+                    input_polygon.interiors()[i].0[cur].into(),
+                    input_polygon.interiors()[i].0[nxt].into(),
+                    orient,
+                );
+                ret.push(new_node);
+            }
+        }
+        ret
     }
 
     fn initialize_from_polygon_vector(
@@ -689,7 +719,16 @@ impl Skeleton {
     }
 
     pub(crate) fn skeleton_of_polygon(input_polygon: &Polygon, orient: bool) -> Self {
-        Self::skeleton_of_polygon_vector(&vec![input_polygon.clone()], orient)
+        let mut vertex_vector =
+            VertexType::initialize_from_polygon(input_polygon, orient);
+        let mut vertex_queue = VertexQueue::new();
+        vertex_queue.initialize_from_polygon(input_polygon);
+        let (event_queue, initial_vertex_queue) = init_pq(orient, &mut vertex_vector, &mut vertex_queue);
+        Self {
+            ray_vector: vertex_vector,
+            event_queue,
+            initial_vertex_queue,
+        }
     }
 
     pub(crate) fn skeleton_of_polygon_vector(
@@ -698,145 +737,9 @@ impl Skeleton {
     ) -> Self {
         let mut vertex_vector =
             VertexType::initialize_from_polygon_vector(input_polygon_vector, orient);
-        let mut event_pq = PriorityQueue::new();
-        let mut event_queue = Vec::new();
         let mut vertex_queue = VertexQueue::new();
         vertex_queue.initialize_from_polygon_vector(input_polygon_vector);
-        let initial_vertex_queue = vertex_queue.clone();
-        // make initial PQ
-        for (_, cv, _) in vertex_queue.iter() {
-            Self::make_shrink_event(cv, &vertex_queue, &mut event_pq, &vertex_vector, true);
-            Self::make_split_event(cv, &vertex_queue, &mut event_pq, &vertex_vector, orient);
-        }
-
-        while !event_pq.is_empty() {
-            let x = event_pq.pop().unwrap();
-            if let Timeline::ShrinkEvent {
-                time,
-                location,
-                left_vertex,
-                right_vertex,
-                left_real,
-                right_real,
-                ..
-            } = x
-            {
-                if vertex_queue.content[left_vertex.get_index()].done
-                    || vertex_queue.content[right_vertex.get_index()].done
-                    || vertex_queue.get_real_index(left_vertex) != left_real
-                    || vertex_queue.get_real_index(right_vertex) != right_real
-                {
-                    continue;
-                }
-                let new_index = vertex_vector.len();
-                let left_ray = vertex_vector[left_real].unwrap_base_ray().0;
-                let right_ray = vertex_vector[right_real].unwrap_base_ray().1;
-                vertex_vector[left_real].set_parent(new_index);
-                vertex_vector[right_real].set_parent(new_index);
-                let new_event = Event::VertexEvent {
-                    time,
-                    merge_from: left_vertex.get_index(),
-                    merge_to: new_index,
-                };
-                let new_vertex = VertexType::new_tree_vertex(location, left_ray, right_ray, orient);
-                vertex_vector.push(new_vertex);
-                match Self::apply_event(&mut vertex_queue, &new_event) {
-                    (Some(IndexType::RealIndex(rv)), None) => {
-                        vertex_vector[rv].set_parent(new_index);
-                        vertex_vector[new_index] = VertexType::new_root_vertex(
-                            vertex_vector[new_index].unwrap_location(),
-                            vertex_vector[new_index].unwrap_time(),
-                        );
-                    }
-                    (Some(cv), None) => {
-                        Self::make_shrink_event(
-                            cv,
-                            &vertex_queue,
-                            &mut event_pq,
-                            &vertex_vector,
-                            false,
-                        );
-                    }
-                    _ => panic!("Expected Vertex Event"),
-                }
-                event_queue.push(new_event);
-            } else if let Timeline::SplitEvent {
-                time,
-                location,
-                anchor_vertex,
-                anchor_real,
-            } = x
-            {
-                if vertex_queue.content[anchor_vertex.get_index()].done
-                    || vertex_queue.get_real_index(anchor_vertex) != anchor_real
-                {
-                    continue;
-                }
-                vertex_queue.cleanup();
-                let rv = Self::find_split_vertex(
-                    anchor_vertex,
-                    &vertex_queue,
-                    &vertex_vector,
-                    false,
-                    orient,
-                );
-                if rv.len() == 1 && feq(rv[0].0, time) && rv[0].1.eq(&location) {
-                    let new_index1 = vertex_vector.len();
-                    let new_index2 = new_index1 + 1;
-                    let new_split_vertex = VertexType::new_split_vertex(
-                        anchor_real,
-                        location,
-                        new_index1,
-                        new_index2,
-                        vertex_vector[anchor_real].unwrap_time(),
-                    );
-                    let new_tree_vertex1 = VertexType::new_tree_vertex(
-                        location,
-                        vertex_vector[anchor_real].unwrap_base_ray().0,
-                        vertex_vector[rv[0].3].unwrap_base_ray().1,
-                        orient,
-                    );
-                    let new_tree_vertex2 = VertexType::new_tree_vertex(
-                        location,
-                        vertex_vector[rv[0].3].unwrap_base_ray().1.reverse(),
-                        vertex_vector[anchor_real].unwrap_base_ray().1,
-                        orient,
-                    );
-                    vertex_vector.push(new_tree_vertex1);
-                    vertex_vector.push(new_tree_vertex2);
-                    vertex_vector.push(new_split_vertex);
-                    let new_event = Event::EdgeEvent {
-                        time,
-                        split_from: anchor_vertex.get_index(),
-                        split_into: rv[0].2.get_index(),
-                        split_to_left: new_index1,
-                        split_to_right: new_index2,
-                    };
-                    match Self::apply_event(&mut vertex_queue, &new_event) {
-                        (Some(cv1), Some(cv2)) => {
-                            vertex_vector[anchor_real].set_parent(new_index2 + 1);
-                            Self::make_shrink_event(
-                                cv1,
-                                &vertex_queue,
-                                &mut event_pq,
-                                &vertex_vector,
-                                false,
-                            );
-                            Self::make_shrink_event(
-                                cv2,
-                                &vertex_queue,
-                                &mut event_pq,
-                                &vertex_vector,
-                                false,
-                            );
-                        }
-                        _ => panic!("Expected Edge Event"),
-                    }
-                    event_queue.push(new_event);
-                }
-            }
-            vertex_queue.cleanup();
-        }
+        let (event_queue, initial_vertex_queue) = init_pq(orient, &mut vertex_vector, &mut vertex_queue);
         Self {
             ray_vector: vertex_vector,
             event_queue,
@@ -890,4 +793,146 @@ impl Skeleton {
         }
         ret
     }
+}
+
+/// Returns an event_queue and an initial_vertex_queue
+fn init_pq(orient: bool, vertex_vector: &mut Vec<VertexType>, vertex_queue: &mut VertexQueue) -> (Vec<Event>, VertexQueue) {
+    let mut event_pq = PriorityQueue::new();
+    let mut event_queue = Vec::new();
+    let initial_vertex_queue = vertex_queue.clone();
+    // make initial PQ
+    for (_, cv, _) in vertex_queue.iter() {
+        Skeleton::make_shrink_event(cv, vertex_queue, &mut event_pq, vertex_vector, true);
+        Skeleton::make_split_event(cv, vertex_queue, &mut event_pq, vertex_vector, orient);
+    }
+
+    while !event_pq.is_empty() {
+        let x = event_pq.pop().unwrap();
+        if let Timeline::ShrinkEvent {
+            time,
+            location,
+            left_vertex,
+            right_vertex,
+            left_real,
+            right_real,
+            ..
+        } = x
+        {
+            if vertex_queue.content[left_vertex.get_index()].done
+                || vertex_queue.content[right_vertex.get_index()].done
+                || vertex_queue.get_real_index(left_vertex) != left_real
+                || vertex_queue.get_real_index(right_vertex) != right_real
+            {
+                continue;
+            }
+            let new_index = vertex_vector.len();
+            let left_ray = vertex_vector[left_real].unwrap_base_ray().0;
+            let right_ray = vertex_vector[right_real].unwrap_base_ray().1;
+            vertex_vector[left_real].set_parent(new_index);
+            vertex_vector[right_real].set_parent(new_index);
+            let new_event = Event::VertexEvent {
+                time,
+                merge_from: left_vertex.get_index(),
+                merge_to: new_index,
+            };
+            let new_vertex = VertexType::new_tree_vertex(location, left_ray, right_ray, orient);
+            vertex_vector.push(new_vertex);
+            match Skeleton::apply_event(vertex_queue, &new_event) {
+                (Some(IndexType::RealIndex(rv)), None) => {
+                    vertex_vector[rv].set_parent(new_index);
+                    vertex_vector[new_index] = VertexType::new_root_vertex(
+                        vertex_vector[new_index].unwrap_location(),
+                        vertex_vector[new_index].unwrap_time(),
+                    );
+                }
+                (Some(cv), None) => {
+                    Skeleton::make_shrink_event(
+                        cv,
+                        vertex_queue,
+                        &mut event_pq,
+                        vertex_vector,
+                        false,
+                    );
+                }
+                _ => panic!("Expected Vertex Event"),
+            }
+            event_queue.push(new_event);
+        } else if let Timeline::SplitEvent {
+            time,
+            location,
+            anchor_vertex,
+            anchor_real,
+        } = x
+        {
+            if vertex_queue.content[anchor_vertex.get_index()].done
+                || vertex_queue.get_real_index(anchor_vertex) != anchor_real
+            {
+                continue;
+            }
+            vertex_queue.cleanup();
+            let rv = Skeleton::find_split_vertex(
+                anchor_vertex,
+                vertex_queue,
+                vertex_vector,
+                false,
+                orient,
+            );
+            if rv.len() == 1 && feq(rv[0].0, time) && rv[0].1.eq(&location) {
+                let new_index1 = vertex_vector.len();
+                let new_index2 = new_index1 + 1;
+                let new_split_vertex = VertexType::new_split_vertex(
+                    anchor_real,
+                    location,
+                    new_index1,
+                    new_index2,
+                    vertex_vector[anchor_real].unwrap_time(),
+                );
+                let new_tree_vertex1 = VertexType::new_tree_vertex(
+                    location,
+                    vertex_vector[anchor_real].unwrap_base_ray().0,
+                    vertex_vector[rv[0].3].unwrap_base_ray().1,
+                    orient,
+                );
+                let new_tree_vertex2 = VertexType::new_tree_vertex(
+                    location,
+                    vertex_vector[rv[0].3].unwrap_base_ray().1.reverse(),
+                    vertex_vector[anchor_real].unwrap_base_ray().1,
+                    orient,
+                );
+                vertex_vector.push(new_tree_vertex1);
+                vertex_vector.push(new_tree_vertex2);
+                vertex_vector.push(new_split_vertex);
+                let new_event = Event::EdgeEvent {
+                    time,
+                    split_from: anchor_vertex.get_index(),
+                    split_into: rv[0].2.get_index(),
+                    split_to_left: new_index1,
+                    split_to_right: new_index2,
+                };
+                match Skeleton::apply_event(vertex_queue, &new_event) {
+                    (Some(cv1), Some(cv2)) => {
+                        vertex_vector[anchor_real].set_parent(new_index2 + 1);
+                        Skeleton::make_shrink_event(
+                            cv1,
+                            vertex_queue,
+                            &mut event_pq,
+                            vertex_vector,
+                            false,
+                        );
+                        Skeleton::make_shrink_event(
+                            cv2,
+                            vertex_queue,
+                            &mut event_pq,
+                            vertex_vector,
+                            false,
+                        );
+                    }
+                    _ => panic!("Expected Edge Event"),
+                }
+                event_queue.push(new_event);
+            }
+        }
+        vertex_queue.cleanup();
+    }
+    (event_queue, initial_vertex_queue)
 }

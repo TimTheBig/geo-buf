@@ -169,11 +169,16 @@ use skeleton::Skeleton;
 /// let p2: MultiPolygon = buffer_polygon(&p1, -0.2);
 ///
 /// let expected_exterior = LineString::from(vec![(0.2, 0.2), (0.8, 0.2), (0.8, 0.8), (0.2, 0.8), (0.2, 0.2)]);
-/// assert_eq!(&expected_exterior, p2.0[0].exterior())
 ///
+/// assert_eq!(&expected_exterior, p2.0[0].exterior())
 /// ```
+#[must_use = "Use the newly buffered Polygon"]
 pub fn buffer_polygon(input_polygon: &Polygon, distance: f64) -> MultiPolygon {
-    buffer_multi_polygon(&MultiPolygon::new(vec![input_polygon.clone()]), distance)
+    let orientation = distance < 0.;
+    let offset_distance = f64::abs(distance);
+    let skel = Skeleton::skeleton_of_polygon(input_polygon, orientation);
+    let vq = skel.get_vertex_queue(offset_distance);
+    skel.apply_vertex_queue(&vq, offset_distance)
 }
 
 /// This function returns the buffered (multi-)polygon of the given polygon, but creates a rounded corners around each convex vertex.
@@ -204,8 +209,13 @@ pub fn buffer_polygon(input_polygon: &Polygon, distance: f64) -> MultiPolygon {
 /// <img src="https://raw.githubusercontent.com/1011-git/geo-buffer/main/assets/ex5.svg" style="padding: 25px 30%;"/>
 /// </details>
 ///
+#[must_use]
 pub fn buffer_polygon_rounded(input_polygon: &Polygon, distance: f64) -> MultiPolygon {
-    buffer_multi_polygon_rounded(&MultiPolygon::new(vec![input_polygon.clone()]), distance)
+    let orientation = distance < 0.;
+    let offset_distance = f64::abs(distance);
+    let skel = Skeleton::skeleton_of_polygon(input_polygon, orientation);
+    let vq = skel.get_vertex_queue(offset_distance);
+    skel.apply_vertex_queue_rounded(&vq, offset_distance)
 }
 
 /// This function returns the buffered (multi-)polygon of the given multi-polygon. This function creates a miter-joint-like corners around each convex vertex.
@@ -232,9 +242,10 @@ pub fn buffer_polygon_rounded(input_polygon: &Polygon, distance: f64) -> MultiPo
 /// let mp1 = MultiPolygon::new(vec![p1, p2]);
 /// let mp2 = buffer_multi_polygon(&mp1, 1.);
 /// let expected_exterior = LineString::from(vec![(-1., -1.), (3., -1.), (3., 2.), (6., 2.), (6., 6.), (2., 6.), (2., 3.), (-1., 3.), (-1., -1.)]);
-/// assert_eq!(&expected_exterior, mp2.0[0].exterior())
 ///
+/// assert_eq!(&expected_exterior, mp2.0[0].exterior())
 /// ```
+#[must_use = "Use the newly buffered MultiPolygon"]
 pub fn buffer_multi_polygon(input_multi_polygon: &MultiPolygon, distance: f64) -> MultiPolygon {
     let orientation = distance < 0.;
     let offset_distance = f64::abs(distance);
@@ -276,6 +287,7 @@ pub fn buffer_multi_polygon(input_multi_polygon: &MultiPolygon, distance: f64) -
 /// <img src="https://raw.githubusercontent.com/1011-git/geo-buffer/main/assets/ex6.svg" style="padding: 25px 30%;"/>
 /// </details>
 ///
+#[must_use]
 pub fn buffer_multi_polygon_rounded(
     input_multi_polygon: &MultiPolygon,
     distance: f64,
@@ -397,6 +409,7 @@ pub fn skeleton_of_multi_polygon_to_linestring(
 /// assert!(neg_empty.is_empty())
 ///
 /// ```
+#[must_use]
 pub fn buffer_point(point: &Point, distance: f64, resolution: usize) -> Polygon {
     if distance < 0. {
         return Polygon::new(LineString::new(vec![]), vec![]);
@@ -408,7 +421,7 @@ pub fn buffer_point(point: &Point, distance: f64, resolution: usize) -> Polygon 
         let dest_x = point.x() + distance * cos;
         let dest_y = point.y() + distance * sin;
 
-        coordinates.push((dest_x, dest_y))
+        coordinates.push((dest_x, dest_y));
     }
     Polygon::new(LineString::from(coordinates), vec![])
 }
